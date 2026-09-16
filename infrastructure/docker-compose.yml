@@ -1,0 +1,45 @@
+# Local development only. Do not use this Compose file as the Render production
+# topology. The `postgres` service is the usual local database. The `api`
+# service is optional (`--profile full`) and runs NODE_ENV=development.
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: lab_dev_only
+      POSTGRES_DB: android_remote_lab
+    ports:
+      - "5432:5432"
+    volumes:
+      - lab_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lab -d android_remote_lab"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: infrastructure/backend.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://lab:lab_dev_only@postgres:5432/android_remote_lab?schema=public
+      HOST: 0.0.0.0
+      PORT: 8080
+      STORAGE_DIR: /app/data/backups
+    ports:
+      - "8080:8080"
+    volumes:
+      - lab_backup_data:/app/data/backups
+    profiles:
+      - full
+
+volumes:
+  lab_pg_data:
+  lab_backup_data:

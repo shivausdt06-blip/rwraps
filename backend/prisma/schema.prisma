@@ -1,0 +1,281 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EnrollmentState {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+enum AuthorizationState {
+  NONE
+  GRANTED
+  REVOKED
+}
+
+enum ConnectionState {
+  OFFLINE
+  ONLINE
+}
+
+enum PairingStatus {
+  PENDING
+  CLAIMED
+  COMPLETED
+  EXPIRED
+  REVOKED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum RemoteSessionStatus {
+  CREATED
+  AUTHENTICATED
+  ACTIVE
+  RECONNECTING
+  TERMINATED
+  REVOKED
+  TIMED_OUT
+}
+
+enum RemoteSessionMode {
+  MONITOR
+  MANAGED
+}
+
+enum BackupStatus {
+  CREATED
+  UPLOADING
+  STAGED
+  COMPLETE
+  CANCELLED
+  FAILED
+  DELETED
+}
+
+enum BackupStorageProvider {
+  LOCAL_ADMIN
+  CLOUD
+}
+
+enum BackupPayloadState {
+  PENDING
+  STAGING
+  LOCAL_ADMIN
+  CLOUD
+  FAILED
+}
+
+enum UploadState {
+  PENDING
+  IN_PROGRESS
+  COMPLETE
+  CANCELLED
+  FAILED
+}
+
+enum ActorType {
+  ADMIN
+  DEVICE
+  SYSTEM
+}
+
+model Admin {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  tokenVersion Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens   RefreshToken[]
+  pairingSessions PairingSession[]
+  ownedDevices    Device[]
+  enrollments     Enrollment[]
+  remoteSessions  RemoteSession[]
+  backups         Backup[]
+  auditEvents     AuditEvent[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  adminId   String    @db.Uuid
+  admin     Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([adminId])
+  @@index([expiresAt])
+}
+
+model Device {
+  id                 String              @id @default(uuid()) @db.Uuid
+  ownerAdminId       String              @db.Uuid
+  ownerAdmin         Admin               @relation(fields: [ownerAdminId], references: [id], onDelete: Restrict)
+  name               String
+  enrollmentState    EnrollmentState     @default(PENDING)
+  authorizationState AuthorizationState  @default(NONE)
+  platform           String              @default("android")
+  androidVersion     String?
+  manufacturer       String?
+  model              String?
+  sdkInt             Int?
+  lastSeenAt         DateTime?
+  connectionState    ConnectionState     @default(OFFLINE)
+  capabilities       Json
+  tokenVersion       Int                 @default(0)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  enrollments         Enrollment[]
+  pairingSessions     PairingSession[]
+  remoteSessions      RemoteSession[]
+  backups             Backup[]
+  deviceRefreshTokens DeviceRefreshToken[]
+  auditEvents         AuditEvent[]
+
+  @@index([ownerAdminId])
+  @@index([connectionState])
+  @@index([lastSeenAt])
+}
+
+model DeviceRefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  deviceId  String    @db.Uuid
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([deviceId])
+}
+
+model Enrollment {
+  id               String           @id @default(uuid()) @db.Uuid
+  deviceId         String           @db.Uuid
+  device           Device           @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  adminId          String           @db.Uuid
+  admin            Admin            @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  pairingSessionId String?          @unique @db.Uuid
+  pairingSession   PairingSession?  @relation(fields: [pairingSessionId], references: [id])
+  status           EnrollmentStatus @default(ACTIVE)
+  revokedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([deviceId])
+  @@index([adminId])
+  @@index([status])
+}
+
+model PairingSession {
+  id                String        @id @default(uuid()) @db.Uuid
+  adminId           String        @db.Uuid
+  admin             Admin         @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  codeHash          String        @unique
+  nonce             String        @unique
+  status            PairingStatus @default(PENDING)
+  expiresAt         DateTime
+  claimedAt         DateTime?
+  usedAt            DateTime?
+  revokedAt         DateTime?
+  deviceId          String?       @db.Uuid
+  device            Device?       @relation(fields: [deviceId], references: [id])
+  pendingDeviceInfo Json?
+  enrollment        Enrollment?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([adminId])
+  @@index([status, expiresAt])
+}
+
+model RemoteSession {
+  id             String              @id @default(uuid()) @db.Uuid
+  deviceId       String              @db.Uuid
+  device         Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  adminId        String              @db.Uuid
+  admin          Admin               @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  status         RemoteSessionStatus @default(CREATED)
+  mode           RemoteSessionMode   @default(MONITOR)
+  startedAt      DateTime?
+  endedAt        DateTime?
+  timeoutAt      DateTime?
+  reconnectCount Int                 @default(0)
+  quality        Json?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([deviceId, status])
+  @@index([adminId, createdAt])
+}
+
+model Backup {
+  id               String                 @id @default(uuid()) @db.Uuid
+  deviceId         String                 @db.Uuid
+  device           Device                 @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  adminId          String                 @db.Uuid
+  admin            Admin                  @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  status           BackupStatus           @default(CREATED)
+  storageProvider  BackupStorageProvider  @default(LOCAL_ADMIN)
+  payloadState     BackupPayloadState     @default(PENDING)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  files            BackupFile[]
+
+  @@index([deviceId])
+  @@index([adminId])
+}
+
+model BackupFile {
+  id             String             @id @default(uuid()) @db.Uuid
+  backupId       String             @db.Uuid
+  backup         Backup             @relation(fields: [backupId], references: [id], onDelete: Cascade)
+  filename       String
+  sizeBytes      BigInt
+  mimeType       String
+  checksumSha256 String
+  uploadState    UploadState        @default(PENDING)
+  payloadState   BackupPayloadState @default(PENDING)
+  storageKey     String             @unique
+  bytesUploaded  BigInt             @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([backupId])
+}
+
+model AuditEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  actorType     ActorType
+  actorAdminId  String?  @db.Uuid
+  actorAdmin    Admin?   @relation(fields: [actorAdminId], references: [id])
+  actorDeviceId String?  @db.Uuid
+  actorDevice   Device?  @relation(fields: [actorDeviceId], references: [id])
+  action        String
+  resourceType  String
+  resourceId    String?
+  ipAddress     String?
+  userAgent     String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([actorAdminId, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@index([action])
+}

@@ -1,0 +1,3 @@
+-keep class lab.arl.admin.** { *; }
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**

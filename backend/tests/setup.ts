@@ -1,0 +1,14 @@
+process.env.NODE_ENV = "test";
+process.env.HOST = "127.0.0.1";
+process.env.PORT = "18080";
+process.env.LOG_LEVEL = "silent";
+process.env.CORS_ORIGIN = "http://localhost:8080";
+process.env.DATABASE_URL ??=
+  "postgresql://lab:lab_dev_only@localhost:5432/android_remote_lab?schema=public";
+process.env.JWT_ACCESS_SECRET = "test-access-secret-32-characters-min";
+process.env.JWT_REFRESH_SECRET = "test-refresh-secret-32-characters-min";
+process.env.PAIRING_PEPPER = "test-pairing-pepper-32-characters-min";
+process.env.ALLOW_ADMIN_REGISTRATION = "true";
+process.env.STORAGE_PROVIDER = "local";
+process.env.STORAGE_DIR = "./data/test-backups";
+process.env.STUN_URLS = "stun:stun.l.google.com:19302";

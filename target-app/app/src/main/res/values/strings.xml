@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">ARL Target</string>
+    <string name="session_notification_title">Remote support session active</string>
+    <string name="session_notification_text">Screen sharing is on. Tap to return to the lab app and end the session.</string>
+    <string name="connected_notification_title">Available for authorized support</string>
+    <string name="connected_notification_text">This device is enrolled. You can revoke access at any time.</string>
+    <string name="accessibility_service_description">Allows an authorized lab administrator to send taps, swipes, and system Back/Home/Recents actions during a consented remote-support session. This service does not start itself. Disable it here at any time to revoke remote interaction. It cannot read passwords, bypass security dialogs, or hide notifications.</string>
+</resources>

@@ -1,0 +1,5 @@
+-keepattributes *Annotation*, InnerClasses, EnclosingMethod, Signature
+-keep class lab.arl.target.** { *; }
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
+-keepclassmembers class kotlinx.serialization.** { *; }

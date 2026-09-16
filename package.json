@@ -1,0 +1,25 @@
+{
+  "name": "android-remote-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Consent-based Android remote support and security research lab",
+  "workspaces": [
+    "backend",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w backend",
+    "build": "npm run build -w shared && npm run build -w backend",
+    "lint": "npm run lint -w backend && npm run lint -w shared",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w backend",
+    "test": "npm run test -w backend",
+    "start": "npm run start -w backend",
+    "db:migrate": "npm run prisma:migrate -w backend",
+    "db:migrate:deploy": "npm run prisma:migrate:deploy -w backend",
+    "db:generate": "npm run prisma:generate -w backend",
+    "db:studio": "npm run prisma:studio -w backend"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

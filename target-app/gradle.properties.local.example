@@ -1,0 +1,7 @@
+# Copy values into gradle.properties or pass -Parl.debugApiBaseUrl=...
+# Emulator → host loopback:
+# arl.debugApiBaseUrl=http://10.0.2.2:8080
+# USB device on same LAN:
+# arl.debugApiBaseUrl=http://192.168.1.10:8080
+# Production:
+# arl.releaseApiBaseUrl=https://lab.example.com

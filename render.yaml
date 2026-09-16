@@ -1,0 +1,49 @@
+# Render Blueprint. Dashboard values marked sync: false must be set by an operator.
+# Never commit production secrets into this file.
+services:
+  - type: web
+    name: android-remote-lab-api
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npx prisma generate --schema backend/prisma/schema.prisma && npm run build
+    startCommand: npm start
+    preDeployCommand: npx prisma migrate deploy --schema backend/prisma/schema.prisma
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: LOG_LEVEL
+        value: info
+      - key: STORAGE_PROVIDER
+        value: local
+      - key: STORAGE_DIR
+        value: ./data/backups
+      - key: BACKUP_PAYLOAD_DESTINATION
+        value: LOCAL_ADMIN
+      - key: ALLOW_ADMIN_REGISTRATION
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: PAIRING_PEPPER
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: PUBLIC_WS_URL
+        sync: false
+      - key: STUN_URLS
+        sync: false
+      - key: TURN_URLS
+        sync: false
+      - key: TURN_USERNAME
+        sync: false
+      - key: TURN_CREDENTIAL
+        sync: false

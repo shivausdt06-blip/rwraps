@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.ArlAdmin" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#FF070708</item>
+        <item name="android:navigationBarColor">#FF070708</item>
+        <item name="android:windowBackground">#FF070708</item>
+    </style>
+</resources>
