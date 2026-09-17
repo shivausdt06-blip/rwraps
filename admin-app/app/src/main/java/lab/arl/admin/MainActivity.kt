@@ -33,13 +33,22 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -152,6 +161,9 @@ private fun Dashboard(state: LabUiState, lab: LabCoordinator, onRenderer: (Surfa
                 }
         ) {
             LiveView(state, lab, onRenderer, fullscreen = true, onExitFullscreen = { fullscreen = false })
+            if (state.session?.mode == SessionMode.MANAGED) {
+                AssistiveBall(lab = lab)
+            }
         }
         return
     }
@@ -563,3 +575,177 @@ private fun formatBytes(value: Long): String {
     if (value < 1024 * 1024) return "${value / 1024}KiB"
     return "${value / (1024 * 1024)}MiB"
 }
+
+@Composable
+private fun AssistiveBall(
+    lab: LabCoordinator,
+    modifier: Modifier = Modifier
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .zIndex(20f),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        if (isExpanded) {
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                    .padding(end = 16.dp)
+                    .background(Color(0xF0121216), RoundedCornerShape(16.dp))
+                    .border(1.5.dp, Online, RoundedCornerShape(16.dp))
+                    .padding(8.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (change.isConsumed) break
+                                        if (!change.pressed) break
+                                        val posChange = change.positionChange()
+                                        if (posChange.getDistance() > 0.5f) {
+                                            change.consume()
+                                            offsetX += posChange.x
+                                            offsetY += posChange.y
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "NAV CONTROLS",
+                            color = Online,
+                            fontFamily = Mono,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(20.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF222228))
+                                .clickable { isExpanded = false },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("✕", color = Mute, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        NavBallButton(
+                            icon = "◀",
+                            label = "BACK",
+                            onClick = { lab.back() }
+                        )
+                        NavBallButton(
+                            icon = "●",
+                            label = "HOME",
+                            onClick = { lab.home() }
+                        )
+                        NavBallButton(
+                            icon = "■",
+                            label = "RECENTS",
+                            onClick = { lab.recents() }
+                        )
+                    }
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                    .padding(end = 16.dp)
+                    .size(54.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xEE141418))
+                    .border(2.dp, Online, CircleShape)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var dragMoved = false
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (change.isConsumed) break
+                                if (!change.pressed) {
+                                    if (!dragMoved) {
+                                        isExpanded = true
+                                    }
+                                    break
+                                }
+                                val posChange = change.positionChange()
+                                if (posChange.getDistance() > 1.0f) {
+                                    dragMoved = true
+                                    change.consume()
+                                    offsetX += posChange.x
+                                    offsetY += posChange.y
+                                }
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        "NAV",
+                        color = Online,
+                        fontFamily = Mono,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "◁ ● ▢",
+                        color = TextMain,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavBallButton(
+    icon: String,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF202026))
+            .border(1.dp, Line, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(icon, color = Online, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(2.dp))
+        Text(label, color = TextMain, fontFamily = Mono, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
