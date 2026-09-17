@@ -75,7 +75,7 @@ class TargetForegroundService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Remote support", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(CHANNEL_ID, "Remote support", NotificationManager.IMPORTANCE_LOW)
             )
         }
         val launch = PendingIntent.getActivity(
@@ -92,13 +92,12 @@ class TargetForegroundService : Service() {
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setContentIntent(launch)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
     companion object {
-        const val CHANNEL_ID = "arl_target_session"
+        const val CHANNEL_ID = "arl_target_session_v2"
         const val NOTIFICATION_ID = 42
         const val EXTRA_SESSION = "session_active"
         const val EXTRA_PROJECTION = "projection_ready"
