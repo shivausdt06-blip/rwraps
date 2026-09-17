@@ -134,7 +134,7 @@ fun TargetScreen(vm: TargetViewModel) {
                 OutlinedTextField(
                     value = state.pairingInput,
                     onValueChange = vm::onPairingInput,
-                    label = { Text("Pairing code or arl://pair?code=…") },
+                    label = { Text("Pairing code") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Button(onClick = vm::claim, modifier = Modifier.fillMaxWidth()) { Text("Claim pairing") }

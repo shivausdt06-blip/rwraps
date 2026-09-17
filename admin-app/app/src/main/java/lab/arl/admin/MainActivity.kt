@@ -504,15 +504,14 @@ private fun SidePanel(state: LabUiState, lab: LabCoordinator) {
                 val p = state.pairing
                 if (p != null) {
                     val context = LocalContext.current
-                    Text("CODE  ${p.pairingCode}", color = TextMain, fontFamily = Mono, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("PAIRING URI", color = Mute, fontFamily = Mono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text(p.qrPayload, color = TextMain, fontFamily = Mono, fontSize = 11.sp)
-                    Text("Physical Target uses api= in this URI (LAN). This Admin emulator still uses ${BuildConfig.API_BASE_URL}.", color = Mute, fontFamily = Mono, fontSize = 10.sp)
-                    Text("Expires ${p.expiresAt}", color = Mute, fontFamily = Mono, fontSize = 11.sp)
+                    Text("PAIRING CODE", color = Mute, fontFamily = Mono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(p.pairingCode, color = Online, fontFamily = Mono, fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    Text("Enter this code on the target device to pair.", color = TextMain, fontFamily = Mono, fontSize = 11.sp)
+                    Text("Expires ${p.expiresAt}", color = Mute, fontFamily = Mono, fontSize = 10.sp)
                     TextButton(onClick = {
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("ARL pairing", p.qrPayload))
-                    }) { Text("COPY LINK", color = Red, fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        cm.setPrimaryClip(ClipData.newPlainText("ARL Pairing Code", p.pairingCode))
+                    }) { Text("COPY CODE", color = Red, fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                 }
             }
             Panel.NONE -> {}
