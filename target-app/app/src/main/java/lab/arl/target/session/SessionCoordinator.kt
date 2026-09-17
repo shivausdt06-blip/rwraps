@@ -107,6 +107,7 @@ class SessionCoordinator(
     private var heartbeatJob: Job? = null
     private var reconnectJob: Job? = null
     private val pendingProjection = AtomicReference<Intent?>(null)
+    private var pendingProjectionData: Pair<Int, Intent>? = null
     private var createdOffer = false
     private val pendingRemoteOffer = AtomicReference<String?>(null)
     private val seenCommands = linkedSetOf<String>()
@@ -207,7 +208,8 @@ class SessionCoordinator(
                         device = device,
                         claim = null,
                         phase = EnrollmentPhase.ENROLLED,
-                        operation = Operation(OperationStatus.SUCCESS)
+                        operation = Operation(OperationStatus.SUCCESS),
+                        needsMediaProjection = true
                     )
                 }
                 connectSockets()
@@ -231,8 +233,38 @@ class SessionCoordinator(
             try {
                 val authed = sessionRepository.authenticate(session.id)
                 WebrtcDiag.log("session_accepted", session.id)
-                _state.update { it.copy(session = authed, needsMediaProjection = true, captureDenied = false) }
-                TargetForegroundService.start(appContext, sessionActive = true, projectionReady = false)
+                if (capture.isRunning) {
+                    capture.resume()
+                    runCatching { webRtc.getOrCreateVideoTrack().setEnabled(true) }
+                    val ice = sessionRepository.iceServers()
+                    webRtc.ensurePeerConnection(ice)
+                    val activated = if (SessionActivatePolicy.shouldCallActivate(authed.status)) {
+                        sessionRepository.activate(authed.id).also {
+                            WebrtcDiag.log("session_activated", authed.id, "http=200")
+                        }
+                    } else {
+                        authed
+                    }
+                    applyPendingRemoteOffer(authed.id)
+                    _state.update {
+                        it.copy(
+                            session = activated,
+                            phase = EnrollmentPhase.ACTIVE_SESSION,
+                            needsMediaProjection = false,
+                            captureDenied = false,
+                            operation = Operation(OperationStatus.SUCCESS)
+                        )
+                    }
+                    TargetForegroundService.start(appContext, sessionActive = true, projectionReady = true)
+                    refreshCapabilities()
+                } else if (pendingProjectionData != null) {
+                    val (resCode, permData) = pendingProjectionData!!
+                    _state.update { it.copy(session = authed, needsMediaProjection = false, captureDenied = false) }
+                    startMedia(resCode, permData)
+                } else {
+                    _state.update { it.copy(session = authed, needsMediaProjection = true, captureDenied = false) }
+                    TargetForegroundService.start(appContext, sessionActive = true, projectionReady = false)
+                }
             } catch (err: Exception) {
                 fail(err)
             }
@@ -253,11 +285,34 @@ class SessionCoordinator(
                 )
             }
             refreshCapabilities()
-            TargetForegroundService.start(appContext, sessionActive = true, projectionReady = false)
+            TargetForegroundService.start(appContext, sessionActive = _state.value.session != null, projectionReady = false)
             return
         }
         pendingProjection.set(data)
-        scope.launch { startMedia(resultCode, data) }
+        pendingProjectionData = Pair(resultCode, data)
+        scope.launch {
+            val session = _state.value.session
+            if (session != null && !session.isTerminal) {
+                startMedia(resultCode, data)
+            } else {
+                try {
+                    val source = webRtc.getOrCreateVideoSource()
+                    val settings = if (_state.value.captureSettings.width == 1280 && _state.value.captureSettings.height == 720) {
+                        CaptureSettings.forDisplay(appContext)
+                    } else {
+                        _state.value.captureSettings
+                    }
+                    capture.start(resultCode, data, source, settings)
+                    capture.pause()
+                    _state.update { it.copy(screenCaptureActive = true, captureDenied = false) }
+                    TargetForegroundService.start(appContext, sessionActive = false, projectionReady = true)
+                    refreshCapabilities()
+                    WebrtcDiag.log("capture_pre_initialized")
+                } catch (e: Exception) {
+                    WebrtcDiag.log("capture_pre_init_failed", extra = e.message)
+                }
+            }
+        }
     }
 
     fun retryScreenCapture() {
@@ -487,6 +542,7 @@ class SessionCoordinator(
         webRtc.close(reason)
         createdOffer = false
         pendingProjection.set(null)
+        pendingProjectionData = null
         _state.update { it.copy(webrtcState = "CLOSED") }
         refreshCapabilities()
     }
@@ -681,11 +737,13 @@ class SessionCoordinator(
 
     fun refreshCapabilities() {
         val st = _state.value
+        val isSettingEnabled = Settings.Secure.getString(
+            appContext.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        )?.let { AccessibilityInspector.isComponentListed(it, appContext.packageName) } == true
+        val isAccessibilityOn = isSettingEnabled && (RemoteInteractionService.connected || RemoteInteractionService.instance != null)
         val caps = CapabilityReporter.report(
-            accessibilityEnabled = Settings.Secure.getString(
-                appContext.contentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )?.let { AccessibilityInspector.isComponentListed(it, appContext.packageName) } == true,
+            accessibilityEnabled = isSettingEnabled,
             accessibilityConnected = RemoteInteractionService.connected,
             sdkInt = android.os.Build.VERSION.SDK_INT,
             captureActive = capture.isRunning
@@ -693,14 +751,10 @@ class SessionCoordinator(
         _state.update { current ->
             current.copy(
                 screenCaptureActive = capture.isRunning,
-                accessibilityEnabled = caps.accessibilityControl || caps.state("ACCESSIBILITY_CONTROL") != "NOT_GRANTED",
+                accessibilityEnabled = isAccessibilityOn,
                 accessibilityConnected = RemoteInteractionService.connected,
                 capabilityStates = caps.states,
-                showAccessibilityOnboarding = AccessibilityOnboarding.shouldPrompt(
-                    phase = current.phase,
-                    remoteInteractionState = caps.states["REMOTE_INTERACTION"],
-                    dismissed = accessibilityPromptDismissed
-                )
+                showAccessibilityOnboarding = !isAccessibilityOn
             )
         }
         if (itEnabled()) {
@@ -716,11 +770,7 @@ class SessionCoordinator(
                         st.copy(
                             device = device,
                             capabilityStates = states,
-                            showAccessibilityOnboarding = AccessibilityOnboarding.shouldPrompt(
-                                phase = st.phase,
-                                remoteInteractionState = caps.states["REMOTE_INTERACTION"],
-                                dismissed = accessibilityPromptDismissed
-                            )
+                            showAccessibilityOnboarding = !isAccessibilityOn
                         )
                     }
                 }
@@ -729,7 +779,6 @@ class SessionCoordinator(
     }
 
     fun dismissAccessibilityOnboarding() {
-        accessibilityPromptDismissed = true
         _state.update { it.copy(showAccessibilityOnboarding = false) }
     }
 
@@ -740,7 +789,6 @@ class SessionCoordinator(
         runCatching {
             ctx.startActivity(AccessibilityOnboarding.settingsIntent(ctx))
         }.onFailure {
-            WebrtcDiag.log("a11y_settings_failed", extra = it.message)
             fail("Could not open Accessibility settings. Open Android Settings → Accessibility → ARL Target.", retryable = false)
         }
     }
@@ -777,6 +825,10 @@ class SessionCoordinator(
         refreshCapabilities()
         if (session.status == "ACTIVE") {
             WebrtcDiag.log("session_active", session.id, "awaiting_admin_offer=${!createdOffer}")
+        }
+        if (session.status == "CREATED") {
+            WebrtcDiag.log("auto_accepting_incoming_session", session.id)
+            acceptIncomingSession()
         }
         refreshCapabilities()
     }

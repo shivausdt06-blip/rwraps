@@ -88,9 +88,15 @@ class CapabilityReporterTest {
 
 class AccessibilityOnboardingTest {
     @Test
-    fun promptsAfterEnrollmentWhenServiceNotGranted() {
+    fun promptsWhenServiceNotGranted() {
         assertTrue(
             AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.ENROLLED, "NOT_GRANTED", dismissed = false)
+        )
+        assertTrue(
+            AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.NOT_ENROLLED, "NOT_GRANTED", dismissed = false)
+        )
+        assertTrue(
+            AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.AUTHORIZATION_PENDING, "NOT_GRANTED", dismissed = false)
         )
         assertTrue(
             AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.CONNECTED, null, dismissed = false)
@@ -101,16 +107,7 @@ class AccessibilityOnboardingTest {
     }
 
     @Test
-    fun hidesWhenNotEnrolledDismissedOrAlreadyEnabled() {
-        assertFalse(
-            AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.AUTHORIZATION_PENDING, "NOT_GRANTED", dismissed = false)
-        )
-        assertFalse(
-            AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.NOT_ENROLLED, "NOT_GRANTED", dismissed = false)
-        )
-        assertFalse(
-            AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.ENROLLED, "NOT_GRANTED", dismissed = true)
-        )
+    fun hidesWhenAlreadyEnabled() {
         assertFalse(
             AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.ENROLLED, "AVAILABLE", dismissed = false)
         )
@@ -119,9 +116,6 @@ class AccessibilityOnboardingTest {
         )
         assertFalse(
             AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.ENROLLED, "UNAVAILABLE", dismissed = false)
-        )
-        assertFalse(
-            AccessibilityOnboarding.shouldPrompt(EnrollmentPhase.REVOKED, "NOT_GRANTED", dismissed = false)
         )
         assertEquals(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS, AccessibilityOnboarding.SETTINGS_ACTION)
     }

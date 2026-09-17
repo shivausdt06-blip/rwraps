@@ -12,14 +12,8 @@ object AccessibilityOnboarding {
     fun shouldPrompt(
         phase: EnrollmentPhase,
         remoteInteractionState: String?,
-        dismissed: Boolean
+        dismissed: Boolean = false
     ): Boolean {
-        val enrolled = phase == EnrollmentPhase.ENROLLED ||
-            phase == EnrollmentPhase.CONNECTED ||
-            phase == EnrollmentPhase.ACTIVE_SESSION
-        if (!enrolled || dismissed) {
-            return false
-        }
         val state = remoteInteractionState ?: "NOT_GRANTED"
         return state == "NOT_GRANTED"
     }
