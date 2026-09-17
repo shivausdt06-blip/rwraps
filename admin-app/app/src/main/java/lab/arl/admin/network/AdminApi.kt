@@ -40,6 +40,9 @@ interface AdminApi {
     @GET("v1/sessions")
     suspend fun sessions(@Query("deviceId") deviceId: String? = null): SessionsResponse
 
+    @GET("v1/sessions/{id}")
+    suspend fun session(@Path("id") id: String): SessionResponse
+
     @POST("v1/sessions/{id}/activate")
     suspend fun activate(@Path("id") id: String): SessionResponse
 

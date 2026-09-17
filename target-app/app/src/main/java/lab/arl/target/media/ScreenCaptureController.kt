@@ -23,6 +23,7 @@ class ScreenCaptureController(
     private var capturer: VideoCapturer? = null
     private var surfaceHelper: SurfaceTextureHelper? = null
     private val running = AtomicBoolean(false)
+    private val paused = AtomicBoolean(false)
     private val frames = AtomicInteger(0)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val projectionCallback = object : MediaProjection.Callback() {
@@ -32,6 +33,19 @@ class ScreenCaptureController(
     }
 
     val isRunning: Boolean get() = running.get()
+    val isPaused: Boolean get() = paused.get()
+
+    fun pause() {
+        if (paused.compareAndSet(false, true)) {
+            WebrtcDiag.log("capture_paused", extra = "frames=${frames.get()}")
+        }
+    }
+
+    fun resume() {
+        if (paused.compareAndSet(true, false)) {
+            WebrtcDiag.log("capture_resumed", extra = "frames=${frames.get()}")
+        }
+    }
 
     fun start(
         resultCode: Int,
@@ -40,6 +54,7 @@ class ScreenCaptureController(
         settings: CaptureSettings
     ) {
         stop()
+        paused.set(false)
         TargetForegroundService.start(appContext, sessionActive = true, projectionReady = true)
         WebrtcDiag.log("capture_started", extra = "${settings.width}x${settings.height}@${settings.fps} result=$resultCode")
         val helper = SurfaceTextureHelper.create("ARLScreenCapture", eglBase.eglBaseContext)
@@ -57,7 +72,7 @@ class ScreenCaptureController(
             }
 
             override fun onFrameCaptured(frame: VideoFrame?) {
-                if (frame == null) return
+                if (frame == null || paused.get()) return
                 val n = frames.incrementAndGet()
                 if (n == 1) {
                     WebrtcDiag.log("first_frame_captured", extra = "${frame.buffer.width}x${frame.buffer.height}")
@@ -82,6 +97,7 @@ class ScreenCaptureController(
 
     fun stop() {
         val wasRunning = running.getAndSet(false)
+        paused.set(false)
         if (!wasRunning && capturer == null && surfaceHelper == null) {
             return
         }

@@ -1,6 +1,7 @@
 import type { Device } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { serializeDevice } from "../lib/serialize.js";
+import { invalidateSessionAuthCache } from "../lib/session-cache.js";
 import { hub } from "./hub.js";
 
 export function envelope(type: string, payload: unknown, id?: string) {
@@ -55,4 +56,8 @@ export function notifySession(adminId: string, deviceId: string, session: unknow
   const message = envelope("session.updated", { session });
   hub.sendToAdmin(adminId, message);
   hub.sendToDevice(deviceId, message);
+  const s = session as { id?: string } | undefined;
+  if (s?.id) {
+    invalidateSessionAuthCache(s.id);
+  }
 }

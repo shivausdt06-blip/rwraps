@@ -226,10 +226,11 @@ class LabCoordinator(
             busy("Opening remote session…")
             try {
                 val existing = _state.value.session
-                if (existing != null && existing.isLive && existing.deviceId != device.id) {
+                if (existing != null && existing.isLive) {
                     runCatching { api.terminate(existing.id) }
-                    stopSessionMedia("switch_device")
+                    stopSessionMedia("new_session")
                 }
+                offered = false
                 val session = api.createSession(CreateSessionRequest(device.id, "MONITOR")).session.toDomain()
                 _state.update {
                     it.copy(
@@ -454,6 +455,7 @@ class LabCoordinator(
         buildJsonObject {
             put("nx", nx.toDouble())
             put("ny", ny.toDouble())
+            put("durationMs", 80)
         }
     )
 
@@ -522,6 +524,28 @@ class LabCoordinator(
                 delay(8_000)
                 runCatching { loadDevices() }
                 runCatching { api.health() }
+                if (socket.state.value == WsState.FAILED || socket.state.value == WsState.DISCONNECTED) {
+                    store.load()?.accessToken?.let { token ->
+                        socket.connect(apiBase, token)
+                    }
+                }
+                val current = _state.value.session
+                if (current != null && !current.isTerminal) {
+                    runCatching {
+                        val updated = api.session(current.id).session.toDomain()
+                        if (updated.status != current.status || updated.mode != current.mode) {
+                            _state.update { it.copy(session = updated) }
+                            log("Session ${updated.status} · ${updated.mode.name}")
+                            if (
+                                (updated.status == "AUTHENTICATED" || updated.status == "ACTIVE") &&
+                                _state.value.screenSharingEnabled && !offered
+                            ) {
+                                log("Target telemetry synchronized")
+                                scope.launch { startViewer(updated) }
+                            }
+                        }
+                    }
+                }
                 if (_state.value.panel == Panel.BACKUP) {
                     runCatching { refreshBackupPanel() }
                     pullBackups()

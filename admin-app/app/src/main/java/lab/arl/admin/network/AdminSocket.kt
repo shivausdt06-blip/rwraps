@@ -26,6 +26,9 @@ enum class WsState { DISCONNECTED, CONNECTING, CONNECTED, FAILED }
 class AdminSocket(private val http: OkHttpClient, private val scope: CoroutineScope) {
     private var socket: WebSocket? = null
     private var beat: Job? = null
+    private var reconnectJob: Job? = null
+    private var lastBaseHttp: String? = null
+    private var lastAccessToken: String? = null
     private val closing = AtomicBoolean(false)
     private val _state = MutableStateFlow(WsState.DISCONNECTED)
     val state: StateFlow<WsState> = _state
@@ -33,8 +36,18 @@ class AdminSocket(private val http: OkHttpClient, private val scope: CoroutineSc
     val messages: SharedFlow<WsEnvelopeDto> = _messages
 
     fun connect(baseHttp: String, accessToken: String) {
-        disconnect()
+        lastBaseHttp = baseHttp
+        lastAccessToken = accessToken
         closing.set(false)
+        reconnectJob?.cancel()
+        disconnectInternal(markDisconnected = false)
+        connectInternal()
+    }
+
+    private fun connectInternal() {
+        val baseHttp = lastBaseHttp ?: return
+        val accessToken = lastAccessToken ?: return
+        if (closing.get()) return
         _state.value = WsState.CONNECTING
         val url = toWs(baseHttp) + "/v1/ws"
         socket = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
@@ -61,15 +74,32 @@ class AdminSocket(private val http: OkHttpClient, private val scope: CoroutineSc
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                _state.value = WsState.FAILED
                 beat?.cancel()
+                _state.value = WsState.FAILED
+                scheduleReconnect()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 beat?.cancel()
-                _state.value = if (closing.get()) WsState.DISCONNECTED else WsState.FAILED
+                if (closing.get()) {
+                    _state.value = WsState.DISCONNECTED
+                } else {
+                    _state.value = WsState.FAILED
+                    scheduleReconnect()
+                }
             }
         })
+    }
+
+    private fun scheduleReconnect() {
+        if (closing.get()) return
+        if (lastBaseHttp.isNullOrBlank() || lastAccessToken.isNullOrBlank()) return
+        if (reconnectJob?.isActive == true) return
+        reconnectJob = scope.launch {
+            delay(3_000)
+            if (closing.get() || _state.value == WsState.CONNECTED || _state.value == WsState.CONNECTING) return@launch
+            connectInternal()
+        }
     }
 
     fun send(type: String, payload: JsonObject) {
@@ -79,10 +109,17 @@ class AdminSocket(private val http: OkHttpClient, private val scope: CoroutineSc
 
     fun disconnect() {
         closing.set(true)
+        reconnectJob?.cancel()
+        disconnectInternal(markDisconnected = true)
+    }
+
+    private fun disconnectInternal(markDisconnected: Boolean) {
         beat?.cancel()
         socket?.close(1000, "bye")
         socket = null
-        _state.value = WsState.DISCONNECTED
+        if (markDisconnected) {
+            _state.value = WsState.DISCONNECTED
+        }
     }
 
     private fun startBeat(ws: WebSocket) {

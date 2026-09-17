@@ -16,6 +16,7 @@ fun createOkHttp(tokenProvider: () -> String?, authenticator: Authenticator, deb
         redactHeader("Cookie")
     }
     return OkHttpClient.Builder()
+        .pingInterval(15, TimeUnit.SECONDS)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .addInterceptor { chain ->

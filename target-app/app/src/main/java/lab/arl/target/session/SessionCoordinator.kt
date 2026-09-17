@@ -150,6 +150,7 @@ class SessionCoordinator(
                 scope.launch { reconnectMedia() }
             }
         }
+        _state.update { it.copy(captureSettings = CaptureSettings.forDisplay(appContext)) }
         restoreEnrollment()
     }
 
@@ -433,7 +434,12 @@ class SessionCoordinator(
             WebrtcDiag.log("capture_start", session.id)
             val ice = sessionRepository.iceServers()
             val source = webRtc.createVideoSource()
-            capture.start(resultCode, permissionData, source, _state.value.captureSettings)
+            val settings = if (_state.value.captureSettings.width == 1280 && _state.value.captureSettings.height == 720) {
+                CaptureSettings.forDisplay(appContext)
+            } else {
+                _state.value.captureSettings
+            }
+            capture.start(resultCode, permissionData, source, settings)
             WebrtcDiag.log("capture_started", session.id)
             webRtc.ensurePeerConnection(ice)
             val activated = if (SessionActivatePolicy.shouldCallActivate(session.status)) {
@@ -493,6 +499,11 @@ class SessionCoordinator(
                     RemoteSessionDto.serializer(),
                     sessionJson
                 ).toDomain()
+                val currentSession = _state.value.session
+                if (currentSession != null && currentSession.id != parsed.id && !currentSession.isTerminal) {
+                    WebrtcDiag.log("session_replaced", parsed.id, "old=${currentSession.id}")
+                    stopMedia("session_replaced")
+                }
                 onSessionUpdated(parsed)
             }
             "signaling.offer" -> {
@@ -543,15 +554,23 @@ class SessionCoordinator(
         val enabled = payload?.get("enabled")?.jsonPrimitive?.booleanOrNull ?: return
         if (!enabled) {
             WebrtcDiag.log("screen_control_off", sessionId)
-            stopMedia("screen_off")
+            capture.pause()
+            runCatching { webRtc.getOrCreateVideoTrack().setEnabled(false) }
             _state.update { it.copy(needsMediaProjection = false) }
-            TargetForegroundService.start(appContext, sessionActive = true, projectionReady = false)
+            TargetForegroundService.start(appContext, sessionActive = true, projectionReady = capture.isRunning)
             refreshCapabilities()
             return
         }
         WebrtcDiag.log("screen_control_on", sessionId)
-        _state.update { it.copy(needsMediaProjection = true, captureDenied = false) }
-        TargetForegroundService.start(appContext, sessionActive = true, projectionReady = false)
+        if (capture.isRunning) {
+            capture.resume()
+            runCatching { webRtc.getOrCreateVideoTrack().setEnabled(true) }
+            _state.update { it.copy(needsMediaProjection = false, captureDenied = false) }
+            WebrtcDiag.log("screen_control_resumed", sessionId)
+        } else {
+            _state.update { it.copy(needsMediaProjection = true, captureDenied = false) }
+        }
+        TargetForegroundService.start(appContext, sessionActive = true, projectionReady = capture.isRunning)
         refreshCapabilities()
     }
 

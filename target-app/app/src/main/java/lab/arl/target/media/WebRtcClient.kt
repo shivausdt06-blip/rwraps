@@ -60,11 +60,26 @@ class WebRtcClient(
         )
     }
 
-    fun createVideoSource(): VideoSource {
+    fun getOrCreateVideoSource(): VideoSource {
+        val existing = videoSource
+        if (existing != null) return existing
         val source = factory.createVideoSource(true)
         videoSource = source
         WebrtcDiag.log("video_source_created")
         return source
+    }
+
+    fun createVideoSource(): VideoSource = getOrCreateVideoSource()
+
+    fun getOrCreateVideoTrack(): VideoTrack {
+        val existing = videoTrack
+        if (existing != null) return existing
+        val source = getOrCreateVideoSource()
+        val track = factory.createVideoTrack("arl_screen", source)
+        track.setEnabled(true)
+        videoTrack = track
+        WebrtcDiag.log("video_track_created", extra = "enabled=${track.enabled()} state=${track.state()}")
+        return track
     }
 
     private fun startOutboundStatsPolling(pc: PeerConnection) {
@@ -117,6 +132,12 @@ class WebRtcClient(
                 state != PeerConnection.PeerConnectionState.CLOSED &&
                 state != PeerConnection.PeerConnectionState.DISCONNECTED
             ) {
+                val track = getOrCreateVideoTrack()
+                existing.senders.firstOrNull { it.track()?.kind() == "video" }?.let { sender ->
+                    if (sender.track() !== track) {
+                        sender.setTrack(track, false)
+                    }
+                }
                 return existing
             }
             WebrtcDiag.log("pc_recycle", extra = state.name)
@@ -195,11 +216,7 @@ class WebRtcClient(
         peerConnection = pc
         WebrtcDiag.log("peer_connection_created")
         WebrtcDiag.log("pc_created")
-        val source = videoSource ?: createVideoSource()
-        val track = factory.createVideoTrack("arl_screen", source)
-        videoTrack = track
-        track.setEnabled(true)
-        WebrtcDiag.log("video_track_created", extra = "enabled=${track.enabled()} state=${track.state()}")
+        val track = getOrCreateVideoTrack()
         val sender = pc.addTrack(track, listOf("arl_screen_stream"))
         WebrtcDiag.log("video_sender_attached", extra = "id=${sender.id()} senders=${pc.senders.size}")
         pc.transceivers

@@ -23,6 +23,7 @@ fun createOkHttp(
         redactHeader("Cookie")
     }
     return OkHttpClient.Builder()
+        .pingInterval(15, TimeUnit.SECONDS)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)

@@ -20,6 +20,13 @@ import { extendSessionIdleDeadline, nextSessionTimeoutAt } from "../lib/session-
 
 const interactionReplay = new ReplayCache();
 
+import {
+  getCachedSession,
+  setCachedSession,
+  invalidateSessionAuthCache,
+  shouldExtendIdle
+} from "../lib/session-cache.js";
+
 const authPayload = z.object({
   role: z.enum(["admin", "device"]),
   accessToken: z.string().min(16)
@@ -308,21 +315,31 @@ export async function websocketRoutes(app: FastifyInstance, config: AppConfig): 
             send(socket, "error", { code: parsed.code, message: parsed.message }, replyId);
             return;
           }
-          const session = await prisma.remoteSession.findUnique({ where: { id: parsed.value.sessionId } });
-          const device = session
-            ? await prisma.device.findUnique({ where: { id: session.deviceId } })
-            : null;
+
+          const now = Date.now();
+          const cached = getCachedSession(parsed.value.sessionId);
+          let session = cached?.session ?? null;
+          let device = cached?.device ?? null;
+
+          if (!session) {
+            session = await prisma.remoteSession.findUnique({ where: { id: parsed.value.sessionId } });
+            device = session
+              ? await prisma.device.findUnique({ where: { id: session.deviceId } })
+              : null;
+          }
+
           const authorized = authorizeAdminCommand({
             adminId: principal.adminId,
             session,
             device,
             command: parsed.value,
-            now: Date.now(),
+            now,
             replay: interactionReplay
           });
           if (!authorized.ok) {
+            invalidateSessionAuthCache(parsed.value.sessionId);
             send(socket, "error", { code: authorized.code, message: authorized.message }, replyId);
-            await writeAudit({
+            writeAudit({
               actorType: "ADMIN",
               actorAdminId: principal.adminId,
               action: "interaction.command.rejected",
@@ -333,31 +350,30 @@ export async function websocketRoutes(app: FastifyInstance, config: AppConfig): 
                 operation: parsed.value.operation,
                 code: authorized.code
               }
-            });
+            }).catch((err) => app.log.warn({ msg: "audit.rejected_failed", err }));
             return;
           }
-          await extendSessionIdleDeadline(config, session!.id);
-          app.log.info({
-            msg: "interaction.received",
-            sessionId: session!.id,
-            commandId: authorized.value.commandId,
-            operation: authorized.value.operation,
-            mode: session!.mode
-          });
-          app.log.info({
-            msg: "interaction.authorized",
-            sessionId: session!.id,
-            commandId: authorized.value.commandId
-          });
+
+          // Cache authorized session in memory for rapid repeated touches
+          setCachedSession(parsed.value.sessionId, session!, device);
+
+          // Zero-latency instant forward to target device
           const forwarded = envelope("interaction.command", authorized.value, replyId);
           const delivered = hub.sendToDevice(session!.deviceId, forwarded);
-          app.log.info({
-            msg: delivered ? "interaction.forwarded" : "interaction.forward_failed",
-            sessionId: session!.id,
-            commandId: authorized.value.commandId,
-            delivered
-          });
-          await writeAudit({
+
+          if (!delivered) {
+            send(socket, "error", { code: "DEVICE_OFFLINE", message: "Target is not connected to the control channel." }, replyId);
+          }
+
+          // Background idle-deadline extension (throttled to at most once per 10s per session)
+          if (shouldExtendIdle(session!.id)) {
+            extendSessionIdleDeadline(config, session!.id).catch((err) => {
+              app.log.warn({ msg: "extend_idle_failed", err, sessionId: session!.id });
+            });
+          }
+
+          // Background audit logging
+          writeAudit({
             actorType: "ADMIN",
             actorAdminId: principal.adminId,
             actorDeviceId: session!.deviceId,
@@ -369,10 +385,10 @@ export async function websocketRoutes(app: FastifyInstance, config: AppConfig): 
               operation: authorized.value.operation,
               delivered
             }
+          }).catch((err) => {
+            app.log.warn({ msg: "audit.command_failed", err });
           });
-          if (!delivered) {
-            send(socket, "error", { code: "DEVICE_OFFLINE", message: "Target is not connected to the control channel." }, replyId);
-          }
+
           return;
         }
 

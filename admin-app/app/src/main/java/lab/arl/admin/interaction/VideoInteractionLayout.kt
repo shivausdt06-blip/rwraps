@@ -20,6 +20,7 @@ class VideoInteractionLayout(
     private val touchOverlay = android.view.View(context)
     private var interactionEnabled = false
     private var dragStart: Pair<Float, Float>? = null
+    private var isLongPress = false
     private val touchSlop = android.view.ViewConfiguration.get(context).scaledTouchSlop
 
     var touchListener: TouchListener? = null
@@ -27,14 +28,9 @@ class VideoInteractionLayout(
     private val gestureDetector = GestureDetectorCompat(
         context,
         object : GestureDetector.SimpleOnGestureListener() {
-            override fun onSingleTapUp(event: MotionEvent): Boolean {
-                if (!interactionEnabled) return false
-                touchListener?.onTap(event.x, event.y)
-                return true
-            }
-
             override fun onLongPress(event: MotionEvent) {
                 if (!interactionEnabled) return
+                isLongPress = true
                 touchListener?.onLongPress(event.x, event.y)
             }
         }
@@ -52,23 +48,29 @@ class VideoInteractionLayout(
             gestureDetector.onTouchEvent(event)
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    isLongPress = false
                     dragStart = event.x to event.y
                     true
                 }
                 MotionEvent.ACTION_UP -> {
                     val start = dragStart
+                    val wasLongPress = isLongPress
                     dragStart = null
-                    if (start != null) {
+                    isLongPress = false
+                    if (start != null && !wasLongPress) {
                         val dx = event.x - start.first
                         val dy = event.y - start.second
                         if (kotlin.math.hypot(dx, dy) >= touchSlop) {
                             touchListener?.onSwipe(start.first, start.second, event.x, event.y)
+                        } else {
+                            touchListener?.onTap(event.x, event.y)
                         }
                     }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     dragStart = null
+                    isLongPress = false
                     true
                 }
                 else -> true
