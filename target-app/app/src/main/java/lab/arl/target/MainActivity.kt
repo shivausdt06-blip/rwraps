@@ -15,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -53,7 +54,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import lab.arl.target.R
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +71,7 @@ import lab.arl.target.domain.OperationStatus
 import lab.arl.target.presentation.theme.PerkDevilTheme
 import lab.arl.target.presentation.theme.PerkOrange
 import lab.arl.target.presentation.theme.PerkBlack
+import lab.arl.target.presentation.theme.Jersey10
 import lab.arl.target.session.TargetUiState
 
 class MainActivity : ComponentActivity() {
@@ -108,27 +113,13 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun PerkDevilLogo(modifier: Modifier = Modifier) {
-    Text(
-        text = buildAnnotatedString {
-            withStyle(SpanStyle(color = PerkBlack, fontWeight = FontWeight.Black)) {
-                append("P")
-            }
-            withStyle(SpanStyle(color = PerkOrange, fontWeight = FontWeight.Black)) {
-                append("E")
-            }
-            withStyle(SpanStyle(color = PerkOrange, fontWeight = FontWeight.Black)) {
-                append("R")
-            }
-            withStyle(SpanStyle(color = PerkBlack, fontWeight = FontWeight.Black)) {
-                append("K")
-            }
-            withStyle(SpanStyle(color = PerkBlack, fontWeight = FontWeight.Black)) {
-                append("DEVIL")
-            }
-        },
-        fontSize = 32.sp,
-        letterSpacing = 2.sp,
+    Image(
+        painter = painterResource(id = R.drawable.perkdevil_logo),
+        contentDescription = "PERKDEVIL",
+        contentScale = ContentScale.Fit,
         modifier = modifier
+            .fillMaxWidth()
+            .height(110.dp)
     )
 }
 
@@ -743,7 +734,7 @@ private fun WizardScaffold(content: @Composable () -> Unit) {
             .verticalScroll(rememberScrollState())
             .background(Color.White)
             .padding(horizontal = 24.dp, vertical = 40.dp),
-        horizontalAlignment = Alignment.Start
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         content()
     }
@@ -759,8 +750,9 @@ private fun PerkTextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = {
-            Text(placeholder, color = Color(0xFF999999))
+            Text(placeholder, color = Color(0xFF999999), fontFamily = Jersey10)
         },
+        textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = Jersey10),
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(

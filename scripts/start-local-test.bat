@@ -25,8 +25,8 @@ set "HEALTH_URL=http://127.0.0.1:8080/health"
 set "BACKEND_PORT=8080"
 set "PG_PORT=5432"
 set "SDK_FALLBACK=D:\Andriod\Sdk"
-set "ADMIN_SERIAL=emulator-5554"
-set "TARGET_SERIAL=6dd5235d"
+if not defined ADMIN_SERIAL set "ADMIN_SERIAL=emulator-5554"
+if not defined TARGET_SERIAL set "TARGET_SERIAL=6dd5235d"
 set "ADMIN_PKG=lab.arl.admin"
 set "TARGET_PKG=lab.arl.target"
 set "ADMIN_APK=%ROOT%\admin-app\app\build\outputs\apk\debug\app-debug.apk"
@@ -592,14 +592,15 @@ if not exist "%STATE_DIR%" mkdir "%STATE_DIR%" >nul 2>&1
 powershell -NoProfile -Command "$url='!API_URL!'.Trim().TrimEnd('/'); $xml='<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\" ?>'+[Environment]::NewLine+'<map>'+[Environment]::NewLine+'    <string name=\"api_base\">'+$url+'</string>'+[Environment]::NewLine+'</map>'+[Environment]::NewLine; Set-Content -Path '%STATE_DIR%\arl_debug_api.xml' -Value $xml -Encoding UTF8"
 "%ADB%" -s %TARGET_SERIAL% push "%STATE_DIR%\arl_debug_api.xml" /data/local/tmp/arl_debug_api.xml >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] Could not push debug API prefs to Target.
-  exit /b 1
+  echo [WARN] Could not push debug API prefs to Target.
+  exit /b 0
 )
+"%ADB%" -s %TARGET_SERIAL% shell run-as %TARGET_PKG% mkdir -p shared_prefs >nul 2>&1
 "%ADB%" -s %TARGET_SERIAL% shell run-as %TARGET_PKG% cp /data/local/tmp/arl_debug_api.xml shared_prefs/arl_debug_api.xml >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] Could not install debug API prefs via run-as %TARGET_PKG%.
+  echo [WARN] Could not install debug API prefs via run-as %TARGET_PKG%.
   echo        Pair with COPY LINK containing api= if this device blocks run-as.
-  exit /b 1
+  exit /b 0
 )
 echo [OK] Target debug API override set to !API_URL!
 exit /b 0
