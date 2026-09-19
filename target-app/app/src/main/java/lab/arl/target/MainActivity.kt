@@ -169,10 +169,10 @@ fun TargetScreen(vm: TargetViewModel, onExit: () -> Unit = {}) {
         }
     }
 
-    // Accessibility gate
+    // Accessibility gate (only block on final active pairing screen, never interrupt onboarding wizard)
     val isAccessibilityActive = state.accessibilityEnabled && !state.showAccessibilityOnboarding
     val showAccessibilityGate = !isAccessibilityActive &&
-        wizardStep != WizardStep.LOGIN &&
+        wizardStep == WizardStep.ACTIVE_PAIRING &&
         state.phase != EnrollmentPhase.NOT_ENROLLED &&
         state.phase != EnrollmentPhase.PAIRING &&
         state.phase != EnrollmentPhase.REVOKED
@@ -265,10 +265,7 @@ private fun LoginScreen(vm: TargetViewModel, state: TargetUiState) {
         PerkButton(
             text = "Log in",
             onClick = {
-                vm.claim()
-                // Auto-confirm after claiming
-                vm.confirm()
-                vm.advanceWizard()
+                vm.login(state.deviceNameInput, state.pairingInput)
             },
             filled = false
         )
@@ -319,7 +316,7 @@ private fun PermissionsScreen(vm: TargetViewModel, state: TargetUiState, context
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(28.dp))
 
         PerkButton(
             text = if (accessibilityOk) "✓ Accessibility Granted" else "accessibility for PERKDEVIL",
@@ -328,16 +325,30 @@ private fun PermissionsScreen(vm: TargetViewModel, state: TargetUiState, context
             enabled = !accessibilityOk
         )
 
-        Spacer(Modifier.height(12.dp))
+        Text(
+            if (accessibilityOk) "Remote interaction permission active"
+            else "Allows admin to interact with screen during support",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF888888),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp)
+        )
 
         PerkButton(
             text = if (screenOk) "✓ Screen Permission Granted" else "Grant Screen Permission",
-            onClick = { vm.retryScreenCapture() },
+            onClick = { vm.requestScreenCapture() },
             filled = false,
             enabled = !screenOk
         )
 
-        Spacer(Modifier.height(32.dp))
+        Text(
+            if (screenOk) "Screen streaming permission active"
+            else "Allows streaming screen to admin during support",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF888888),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 24.dp)
+        )
 
         PerkButton(
             text = "DONE",
@@ -354,7 +365,7 @@ private fun PermissionsScreen(vm: TargetViewModel, state: TargetUiState, context
         if (!accessibilityOk || !screenOk) {
             Spacer(Modifier.height(8.dp))
             Text(
-                "Please grant all permissions to continue",
+                "Please grant both permissions above to continue",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF999999),
                 textAlign = TextAlign.Center,

@@ -220,6 +220,42 @@ class SessionCoordinator(
         }
     }
 
+    fun claimAndConfirm(name: String, code: String, onSuccess: () -> Unit) {
+        scope.launch {
+            val parsed = PairingCodeParser.parse(code.trim())
+            if (parsed == null) {
+                fail("Enter a valid pairing code.", retryable = false)
+                return@launch
+            }
+            setLoading("Logging in…")
+            _state.update { it.copy(phase = EnrollmentPhase.PAIRING, deviceNameInput = name, pairingInput = code) }
+            try {
+                apiBaseUrl = applyPairingApi(parsed.apiBaseUrl)
+                _state.update { it.copy(apiBaseUrl = apiBaseUrl) }
+                val profile = profileFactory.create(name.ifBlank { null })
+                val claim = pairingRepository.claim(parsed.code, profile)
+                val (device, _, _) = pairingRepository.confirm(claim.claimToken)
+                persistDebugApi()
+                accessibilityPromptDismissed = false
+                _state.update {
+                    it.copy(
+                        device = device,
+                        claim = null,
+                        phase = EnrollmentPhase.ENROLLED,
+                        operation = Operation(OperationStatus.SUCCESS),
+                        needsMediaProjection = true
+                    )
+                }
+                connectSockets()
+                refreshCapabilities()
+                onSuccess()
+            } catch (err: Exception) {
+                _state.update { it.copy(phase = EnrollmentPhase.NOT_ENROLLED) }
+                fail(err)
+            }
+        }
+    }
+
     fun cancelPairing() {
         _state.update {
             it.copy(claim = null, phase = EnrollmentPhase.NOT_ENROLLED, operation = Operation())
@@ -315,9 +351,12 @@ class SessionCoordinator(
         }
     }
 
-    fun retryScreenCapture() {
-        if (_state.value.session == null || _state.value.session?.isTerminal == true) return
+    fun requestScreenCapture() {
         _state.update { it.copy(needsMediaProjection = true, captureDenied = false) }
+    }
+
+    fun retryScreenCapture() {
+        requestScreenCapture()
     }
 
     /** Walk through missing capabilities using legitimate Android consent flows. */

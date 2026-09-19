@@ -90,40 +90,40 @@ class TargetViewModel(
     fun computeWizardStep(state: TargetUiState): WizardStep {
         val phase = state.phase
         return when {
-            // Not enrolled yet → Login screen
+            // Not enrolled yet -> Login screen
             phase == EnrollmentPhase.NOT_ENROLLED ||
             phase == EnrollmentPhase.PAIRING ||
             phase == EnrollmentPhase.REVOKED -> WizardStep.LOGIN
 
-            // Authorization pending → also show login (waiting for confirm)
+            // Authorization pending -> waiting for confirm
             phase == EnrollmentPhase.AUTHORIZATION_PENDING -> WizardStep.LOGIN
 
-            // Enrolled/Connected/Active → check wizard progress
+            // Enrolled/Connected/Active -> keep current wizard progress
             else -> {
-                val accessibilityOk = state.accessibilityEnabled && !state.showAccessibilityOnboarding
-                val screenOk = state.screenCaptureActive
-
-                when {
-                    // Permissions not yet granted
-                    !accessibilityOk || !screenOk -> {
-                        // If user hasn't progressed past permissions yet
-                        if (_wizardStep.value.ordinal <= WizardStep.PERMISSIONS.ordinal) {
-                            WizardStep.PERMISSIONS
-                        } else _wizardStep.value
+                if (_wizardStep.value == WizardStep.LOGIN) {
+                    val accessibilityOk = state.accessibilityEnabled && !state.showAccessibilityOnboarding
+                    val screenOk = state.screenCaptureActive
+                    if (!accessibilityOk || !screenOk) {
+                        WizardStep.PERMISSIONS
+                    } else if (!_contactSubmitted.value) {
+                        WizardStep.CONGRATULATIONS
+                    } else {
+                        WizardStep.ACTIVE_PAIRING
                     }
-                    // Contact not submitted yet — show wizard flow
-                    !_contactSubmitted.value -> {
-                        // Stay at current wizard step if beyond permissions
-                        if (_wizardStep.value.ordinal < WizardStep.CONGRATULATIONS.ordinal) {
-                            WizardStep.CONGRATULATIONS
-                        } else _wizardStep.value
-                    }
-                    // Everything done → active pairing
-                    else -> WizardStep.ACTIVE_PAIRING
+                } else {
+                    _wizardStep.value
                 }
             }
         }
     }
+
+    fun login(name: String, code: String) {
+        coordinator.claimAndConfirm(name, code) {
+            _wizardStep.value = WizardStep.PERMISSIONS
+        }
+    }
+
+    fun requestScreenCapture() = coordinator.requestScreenCapture()
 
     fun advanceWizard() {
         val current = _wizardStep.value
