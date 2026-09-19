@@ -789,7 +789,7 @@ class SessionCoordinator(
         runCatching {
             ctx.startActivity(AccessibilityOnboarding.settingsIntent(ctx))
         }.onFailure {
-            fail("Could not open Accessibility settings. Open Android Settings → Accessibility → ARL Target.", retryable = false)
+            fail("Could not open Accessibility settings. Open Android Settings → Accessibility → PerkDevil.", retryable = false)
         }
     }
 

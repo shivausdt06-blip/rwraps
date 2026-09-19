@@ -1,7 +1,9 @@
 <resources>
-    <style name="Theme.ArlTarget" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#FF140A0A</item>
-        <item name="android:navigationBarColor">#FF140A0A</item>
-        <item name="android:windowBackground">#FF140A0A</item>
+    <style name="Theme.ArlTarget" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#FFFFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFFFF</item>
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

@@ -134,7 +134,7 @@ object TargetPresentationMapper {
         val ready = remote == "AVAILABLE" && state.accessibilityConnected
         val detail = when {
             ready -> null
-            remote == "RESTRICTED" -> "Enable ARL Target in Accessibility settings"
+            remote == "RESTRICTED" -> "Enable PerkDevil in Accessibility settings"
             else -> "Enable Accessibility for remote interaction"
         }
         return SetupItem(
